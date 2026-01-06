@@ -12,10 +12,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  create-release:
+  prepare:
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,19 +30,8 @@ jobs:
           git tag -a "v${{ inputs.version }}" -m "v${{ inputs.version }}"
           git push origin main --tags
 
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ inputs.version }}
-          release_name: v${{ inputs.version }}
-          draft: false
-          prerelease: false
-
   build:
-    needs: create-release
+    needs: prepare
     strategy:
       matrix:
         include:
@@ -98,30 +85,33 @@ jobs:
           cd target/${{ matrix.target }}/release
           7z a ../../../git-workty-${{ inputs.version }}-${{ matrix.name }}.zip git-workty.exe
 
-      - name: Upload Release Asset (Unix)
-        if: matrix.os != 'windows-latest'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: git-workty-${{ inputs.version }}-${{ matrix.name }}.tar.gz
-          asset_name: git-workty-${{ inputs.version }}-${{ matrix.name }}.tar.gz
-          asset_content_type: application/gzip
+          name: git-workty-${{ matrix.name }}
+          path: git-workty-${{ inputs.version }}-${{ matrix.name }}.*
 
-      - name: Upload Release Asset (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-release-asset@v1
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          files: artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: git-workty-${{ inputs.version }}-${{ matrix.name }}.zip
-          asset_name: git-workty-${{ inputs.version }}-${{ matrix.name }}.zip
-          asset_content_type: application/zip
 
   publish-crate:
-    needs: [create-release, build]
+    needs: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
