@@ -1,6 +1,7 @@
 use crate::git::GitRepo;
 use crate::worktree::Worktree;
 use anyhow::Result;
+use rayon::prelude::*;
 use serde::Serialize;
 use std::process::Command;
 
@@ -83,7 +84,6 @@ fn get_ahead_behind(
     match output {
         Ok(out) if out.status.success() => {
             let s = String::from_utf8_lossy(&out.stdout);
-            // Expected output: "1\t2" or "1 2"
             let parts: Vec<&str> = s.split_whitespace().collect();
             if parts.len() == 2 {
                 let ahead = parts[0].parse().ok();
@@ -99,10 +99,10 @@ fn get_ahead_behind(
 
 pub fn get_all_statuses(repo: &GitRepo, worktrees: &[Worktree]) -> Vec<(Worktree, WorktreeStatus)> {
     worktrees
-        .iter()
-        .map(|wt| {
-            let status = get_worktree_status(repo, wt);
-            (wt.clone(), status)
+        .par_iter()
+        .map(|worktree| {
+            let status = get_worktree_status(repo, worktree);
+            (worktree.clone(), status)
         })
         .collect()
 }
