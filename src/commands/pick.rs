@@ -3,6 +3,7 @@ use crate::git::GitRepo;
 use crate::ui::{print_error, UiOptions};
 use crate::worktree::list_worktrees;
 use anyhow::Result;
+use console::Term;
 use dialoguer::FuzzySelect;
 use is_terminal::IsTerminal;
 
@@ -30,7 +31,7 @@ pub fn execute(repo: &GitRepo, _opts: &UiOptions) -> Result<()> {
         .with_prompt("Select worktree")
         .items(&items)
         .default(0)
-        .interact_opt()?;
+        .interact_on_opt(&Term::stderr())?;
 
     match selection {
         Some(idx) => {

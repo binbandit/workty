@@ -323,12 +323,13 @@ dependencies = [
 
 [[package]]
 name = "git-workty"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
  "clap_complete",
  "clap_mangen",
+ "console",
  "dialoguer",
  "dirs",
  "hex",
