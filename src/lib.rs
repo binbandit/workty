@@ -11,8 +11,7 @@ use clap::{Parser, Subcommand};
 use clap_complete::Shell;
 use std::path::PathBuf;
 
-// use crate::commands::{clean, completions, doctor, go, init, install_man, list, new, pick, pr, rm};
-use crate::commands::{clean, completions, doctor, go, init, list, new, pick, pr, rm};
+use crate::commands::{clean, completions, doctor, go, init, install_man, list, new, pick, pr, rm};
 use crate::git::GitRepo;
 use crate::ui::UiOptions;
 
@@ -191,6 +190,9 @@ pub enum Commands {
         #[arg(long, short = 'o')]
         open: bool,
     },
+
+    /// Install manpage to ~/.local/share/man/man1
+    InstallMan,
 }
 
 pub fn run_cli() {
@@ -316,6 +318,8 @@ fn run(cli: Cli, ui_opts: &UiOptions) -> anyhow::Result<()> {
                 },
             )
         }
+
+        Some(Commands::InstallMan) => install_man::execute(cli.yes),
     }
 }
 

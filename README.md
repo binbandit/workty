@@ -30,6 +30,16 @@ eval "$(git workty init bash)"
 git workty init fish | source
 ```
 
+### Manpages
+
+To generate and install the manpage automatically:
+
+```bash
+git workty install-man
+```
+
+This will write `git-workty.1` to `~/.local/share/man/man1`. You may need to add `~/.local/share/man` to your `MANPATH` environment variable if your system doesn't pick it up automatically.
+
 ## Usage
 
 The whole point is to make worktrees feel like browser tabs:
