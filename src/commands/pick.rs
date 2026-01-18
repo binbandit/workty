@@ -21,7 +21,10 @@ pub fn execute(repo: &GitRepo, _opts: &UiOptions) -> Result<()> {
         std::process::exit(1);
     }
 
-    let items: Vec<String> = worktrees.iter().map(|wt| wt.name().to_string()).collect();
+    let items: Vec<String> = worktrees
+        .iter()
+        .map(|worktree| worktree.name().to_string())
+        .collect();
 
     let selection = FuzzySelect::new()
         .with_prompt("Select worktree")

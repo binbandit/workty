@@ -9,12 +9,12 @@ pub struct GitRepo {
 
 impl GitRepo {
     pub fn discover(start_path: Option<&Path>) -> Result<Self> {
-        let cwd = start_path
+        let working_directory = start_path
             .map(PathBuf::from)
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
-        let root = git_rev_parse(&cwd, &["--show-toplevel"])?;
-        let common_dir = git_rev_parse(&cwd, &["--git-common-dir"])?;
+        let root = git_rev_parse(&working_directory, &["--show-toplevel"])?;
+        let common_dir = git_rev_parse(&working_directory, &["--git-common-dir"])?;
 
         let root = PathBuf::from(root.trim());
         let common_dir_str = common_dir.trim();
@@ -41,20 +41,22 @@ impl GitRepo {
     }
 
     pub fn origin_url(&self) -> Option<String> {
-        self.run_git(&["remote", "get-url", "origin"]).ok().map(|s| s.trim().to_string())
+        self.run_git(&["remote", "get-url", "origin"])
+            .ok()
+            .map(|s| s.trim().to_string())
     }
 }
 
-fn git_rev_parse(cwd: &Path, args: &[&str]) -> Result<String> {
+fn git_rev_parse(working_directory: &Path, args: &[&str]) -> Result<String> {
     let mut cmd_args = vec!["rev-parse"];
     cmd_args.extend(args);
-    run_git_command(Some(cwd), &cmd_args)
+    run_git_command(Some(working_directory), &cmd_args)
 }
 
-pub fn run_git_command(cwd: Option<&Path>, args: &[&str]) -> Result<String> {
+pub fn run_git_command(working_directory: Option<&Path>, args: &[&str]) -> Result<String> {
     let mut cmd = Command::new("git");
-    if let Some(dir) = cwd {
-        cmd.current_dir(dir);
+    if let Some(directory) = working_directory {
+        cmd.current_dir(directory);
     }
     cmd.args(args);
 

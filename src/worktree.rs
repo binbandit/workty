@@ -34,8 +34,8 @@ pub fn parse_worktree_list(output: &str) -> Vec<Worktree> {
     for line in output.lines() {
         if line.is_empty() {
             if let Some(builder) = current.take() {
-                if let Some(wt) = builder.build() {
-                    worktrees.push(wt);
+                if let Some(worktree) = builder.build() {
+                    worktrees.push(worktree);
                 }
             }
             continue;
@@ -65,8 +65,8 @@ pub fn parse_worktree_list(output: &str) -> Vec<Worktree> {
     }
 
     if let Some(builder) = current {
-        if let Some(wt) = builder.build() {
-            worktrees.push(wt);
+        if let Some(worktree) = builder.build() {
+            worktrees.push(worktree);
         }
     }
 
@@ -93,11 +93,10 @@ impl WorktreeBuilder {
             return None;
         }
 
-        let branch_short = self.branch.as_ref().map(|b| {
-            b.strip_prefix("refs/heads/")
-                .unwrap_or(b)
-                .to_string()
-        });
+        let branch_short = self
+            .branch
+            .as_ref()
+            .map(|b| b.strip_prefix("refs/heads/").unwrap_or(b).to_string());
 
         Some(Worktree {
             path,
@@ -119,16 +118,22 @@ pub fn list_worktrees(repo: &GitRepo) -> Result<Vec<Worktree>> {
 }
 
 pub fn find_worktree<'a>(worktrees: &'a [Worktree], name: &str) -> Option<&'a Worktree> {
-    worktrees.iter().find(|wt| {
-        wt.branch_short.as_deref() == Some(name)
-            || wt.path.file_name().and_then(|s| s.to_str()) == Some(name)
+    worktrees.iter().find(|worktree| {
+        worktree.branch_short.as_deref() == Some(name)
+            || worktree.path.file_name().and_then(|s| s.to_str()) == Some(name)
     })
 }
 
 pub fn slug_from_branch(branch: &str) -> String {
     branch
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .trim_matches('-')
         .to_string()
@@ -201,6 +206,9 @@ branch refs/heads/main
     fn test_slug_from_branch() {
         assert_eq!(slug_from_branch("feat/login"), "feat-login");
         assert_eq!(slug_from_branch("fix/bug-123"), "fix-bug-123");
-        assert_eq!(slug_from_branch("feature/add user auth"), "feature-add-user-auth");
+        assert_eq!(
+            slug_from_branch("feature/add user auth"),
+            "feature-add-user-auth"
+        );
     }
 }
