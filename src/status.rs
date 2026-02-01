@@ -3,7 +3,6 @@ use crate::worktree::Worktree;
 use anyhow::Result;
 use rayon::prelude::*;
 use serde::Serialize;
-use std::process::Command;
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct WorktreeStatus {
@@ -24,9 +23,17 @@ impl WorktreeStatus {
     }
 }
 
-pub fn get_worktree_status(repo: &GitRepo, worktree: &Worktree) -> WorktreeStatus {
-    let dirty_count = get_dirty_count(&worktree.path);
-    let (upstream, ahead, behind) = get_ahead_behind(repo, worktree);
+pub fn get_worktree_status(_repo: &GitRepo, worktree: &Worktree) -> WorktreeStatus {
+    // Open the worktree repo once and reuse it for all status queries
+    let wt_repo = match git2::Repository::open(&worktree.path) {
+        Ok(r) => r,
+        Err(_) => {
+            return WorktreeStatus::default();
+        }
+    };
+
+    let dirty_count = get_dirty_count(&wt_repo);
+    let (upstream, ahead, behind) = get_ahead_behind(&wt_repo, worktree);
 
     WorktreeStatus {
         dirty_count,
@@ -36,64 +43,70 @@ pub fn get_worktree_status(repo: &GitRepo, worktree: &Worktree) -> WorktreeStatu
     }
 }
 
-fn get_dirty_count(worktree_path: &std::path::Path) -> usize {
-    let output = Command::new("git")
-        .current_dir(worktree_path)
-        .args(["status", "--porcelain"])
-        .output();
+fn get_dirty_count(repo: &git2::Repository) -> usize {
+    // Use git2's status API - much faster than spawning a process
+    let mut opts = git2::StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .exclude_submodules(true);
 
-    match output {
-        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .filter(|line| !line.is_empty())
-            .count(),
-        _ => 0,
+    match repo.statuses(Some(&mut opts)) {
+        Ok(statuses) => statuses.len(),
+        Err(_) => 0,
     }
 }
 
 fn get_ahead_behind(
-    _repo: &GitRepo,
+    repo: &git2::Repository,
     worktree: &Worktree,
 ) -> (Option<String>, Option<usize>, Option<usize>) {
     if worktree.detached {
         return (None, None, None);
     }
 
-    let upstream = Command::new("git")
-        .current_dir(&worktree.path)
-        .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-        .output();
-
-    let upstream = match upstream {
-        Ok(out) if out.status.success() => {
-            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if s.is_empty() {
-                None
-            } else {
-                Some(s)
-            }
-        }
-        _ => return (None, None, None),
+    // Get the current branch
+    let head = match repo.head() {
+        Ok(h) => h,
+        Err(_) => return (None, None, None),
     };
 
-    let output = Command::new("git")
-        .current_dir(&worktree.path)
-        .args(["rev-list", "--left-right", "--count", "HEAD...@{u}"])
-        .output();
+    if !head.is_branch() {
+        return (None, None, None);
+    }
 
-    match output {
-        Ok(out) if out.status.success() => {
-            let s = String::from_utf8_lossy(&out.stdout);
-            let parts: Vec<&str> = s.split_whitespace().collect();
-            if parts.len() == 2 {
-                let ahead = parts[0].parse().ok();
-                let behind = parts[1].parse().ok();
-                (upstream, ahead, behind)
-            } else {
-                (upstream, Some(0), Some(0))
-            }
-        }
-        _ => (upstream, None, None),
+    let branch_name = match head.shorthand() {
+        Some(name) => name,
+        None => return (None, None, None),
+    };
+
+    // Find the local branch and its upstream
+    let branch = match repo.find_branch(branch_name, git2::BranchType::Local) {
+        Ok(b) => b,
+        Err(_) => return (None, None, None),
+    };
+
+    let upstream_branch = match branch.upstream() {
+        Ok(u) => u,
+        Err(_) => return (None, None, None), // No upstream configured
+    };
+
+    let upstream_name = upstream_branch.name().ok().flatten().map(|s| s.to_string());
+
+    // Get the OIDs for both branches
+    let local_oid = match head.target() {
+        Some(oid) => oid,
+        None => return (upstream_name, None, None),
+    };
+
+    let upstream_oid = match upstream_branch.get().target() {
+        Some(oid) => oid,
+        None => return (upstream_name, None, None),
+    };
+
+    // Use git2's graph_ahead_behind - this is the key performance improvement
+    match repo.graph_ahead_behind(local_oid, upstream_oid) {
+        Ok((ahead, behind)) => (upstream_name, Some(ahead), Some(behind)),
+        Err(_) => (upstream_name, None, None),
     }
 }
 
@@ -108,7 +121,10 @@ pub fn get_all_statuses(repo: &GitRepo, worktrees: &[Worktree]) -> Vec<(Worktree
 }
 
 pub fn is_worktree_dirty(worktree: &Worktree) -> bool {
-    get_dirty_count(&worktree.path) > 0
+    match git2::Repository::open(&worktree.path) {
+        Ok(repo) => get_dirty_count(&repo) > 0,
+        Err(_) => false,
+    }
 }
 
 #[allow(dead_code)]
