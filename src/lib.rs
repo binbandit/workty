@@ -140,11 +140,20 @@ pub enum Commands {
     /// Remove merged or stale worktrees
     #[command(after_help = "EXAMPLES:
     git workty clean --merged --dry-run
-    git workty clean --merged --yes")]
+    git workty clean --gone --yes
+    git workty clean --stale 30")]
     Clean {
-        /// Only remove worktrees whose branch is merged into base
+        /// Remove worktrees whose branch is merged into base
         #[arg(long)]
         merged: bool,
+
+        /// Remove worktrees whose upstream branch was deleted
+        #[arg(long)]
+        gone: bool,
+
+        /// Remove worktrees not touched in N days
+        #[arg(long, value_name = "DAYS")]
+        stale: Option<u32>,
 
         /// Show what would be removed without removing
         #[arg(long, short = 'n')]
@@ -303,12 +312,19 @@ fn run(cli: Cli, ui_opts: &UiOptions) -> anyhow::Result<()> {
             )
         }
 
-        Some(Commands::Clean { merged, dry_run }) => {
+        Some(Commands::Clean {
+            merged,
+            gone,
+            stale,
+            dry_run,
+        }) => {
             let repo = GitRepo::discover(start_path)?;
             clean::execute(
                 &repo,
                 clean::CleanOptions {
                     merged,
+                    gone,
+                    stale_days: stale,
                     dry_run,
                     yes: cli.yes,
                 },

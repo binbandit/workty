@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::git::GitRepo;
-use crate::status::is_worktree_dirty;
+use crate::status::{get_all_statuses, is_worktree_dirty};
 use crate::ui::{print_info, print_success, print_warning};
 use crate::worktree::{list_worktrees, Worktree};
 use anyhow::{Context, Result};
@@ -10,6 +10,8 @@ use std::process::Command;
 
 pub struct CleanOptions {
     pub merged: bool,
+    pub gone: bool,
+    pub stale_days: Option<u32>,
     pub dry_run: bool,
     pub yes: bool,
 }
@@ -18,6 +20,24 @@ pub fn execute(repo: &GitRepo, opts: CleanOptions) -> Result<()> {
     let config = Config::load(repo)?;
     let worktrees = list_worktrees(repo)?;
     let current_path = std::env::current_dir().unwrap_or_default();
+
+    // Get statuses if we need them for --gone or --stale
+    let statuses = if opts.gone || opts.stale_days.is_some() {
+        Some(get_all_statuses(repo, &worktrees))
+    } else {
+        None
+    };
+
+    // Helper to find status for a worktree
+    let get_status = |wt: &Worktree| {
+        statuses.as_ref().and_then(|s| {
+            s.iter()
+                .find(|(w, _)| w.path == wt.path)
+                .map(|(_, status)| status)
+        })
+    };
+
+    let has_filter = opts.merged || opts.gone || opts.stale_days.is_some();
 
     let candidates: Vec<&Worktree> = worktrees
         .iter()
@@ -40,15 +60,42 @@ pub fn execute(repo: &GitRepo, opts: CleanOptions) -> Result<()> {
                 }
             }
 
+            // If no filter specified, don't include anything
+            if !has_filter {
+                return false;
+            }
+
+            // Check --merged
             if opts.merged {
                 if let Some(branch) = &wt.branch_short {
-                    matches!(repo.is_merged(branch, &config.base), Ok(true))
-                } else {
-                    false
+                    if matches!(repo.is_merged(branch, &config.base), Ok(true)) {
+                        return true;
+                    }
                 }
-            } else {
-                true
             }
+
+            // Check --gone (upstream branch deleted)
+            if opts.gone {
+                if let Some(status) = get_status(wt) {
+                    if status.upstream_gone {
+                        return true;
+                    }
+                }
+            }
+
+            // Check --stale (not touched in X days)
+            if let Some(days) = opts.stale_days {
+                if let Some(status) = get_status(wt) {
+                    if let Some(seconds) = status.last_commit_time {
+                        let stale_seconds = (days as i64) * 24 * 60 * 60;
+                        if seconds > stale_seconds {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            false
         })
         .collect();
 
