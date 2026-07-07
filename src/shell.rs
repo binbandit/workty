@@ -342,8 +342,3 @@ function wgo {
 
     output
 }
-
-#[allow(dead_code)]
-pub fn supported_shells() -> &'static [&'static str] {
-    &["bash", "zsh", "fish", "powershell"]
-}

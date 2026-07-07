@@ -6,17 +6,13 @@ use std::process::Command;
 pub fn execute(repo: &GitRepo, all: bool) -> Result<()> {
     ui::print_info("Fetching from remotes...");
 
-    let git_repo = repo.repo.lock().unwrap();
-    let remotes = git_repo.remotes().context("Failed to list remotes")?;
-
     let remote_names: Vec<String> = if all {
+        let remotes = repo.repo.remotes().context("Failed to list remotes")?;
         remotes.iter().flatten().map(|s| s.to_string()).collect()
     } else {
         // Just fetch origin by default
         vec!["origin".to_string()]
     };
-
-    drop(git_repo); // Release the lock before running commands
 
     for remote in &remote_names {
         ui::print_info(&format!("  Fetching {}...", remote));

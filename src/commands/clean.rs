@@ -108,11 +108,13 @@ pub fn execute(repo: &GitRepo, opts: CleanOptions) -> Result<()> {
         return Ok(());
     }
 
-    // Compute dirty status once per candidate to avoid redundant checks
+    // Compute dirty status once per candidate, reusing the status batch if we have one
     let candidates_with_dirty: Vec<(&Worktree, bool)> = candidates
         .into_iter()
         .map(|wt| {
-            let is_dirty = is_worktree_dirty(wt);
+            let is_dirty = get_status(wt)
+                .map(|s| s.is_dirty())
+                .unwrap_or_else(|| is_worktree_dirty(wt));
             (wt, is_dirty)
         })
         .collect();

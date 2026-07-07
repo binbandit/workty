@@ -1,5 +1,5 @@
 use crate::git::GitRepo;
-use crate::status::{get_all_statuses, is_worktree_dirty};
+use crate::status::get_all_statuses;
 use crate::ui;
 use crate::worktree::list_worktrees;
 use anyhow::{Context, Result};
@@ -58,8 +58,8 @@ pub fn execute(repo: &GitRepo, opts: SyncOptions) -> Result<()> {
 
         let branch_name = wt.name();
 
-        // Skip if dirty
-        if is_worktree_dirty(wt) {
+        // Skip if dirty (already computed in the status batch)
+        if status.is_dirty() {
             if !opts.dry_run {
                 ui::print_warning(&format!("{}: skipped (dirty)", branch_name));
             }

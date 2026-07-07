@@ -38,10 +38,7 @@ pub fn same_path(p1: &Path, p2: &Path) -> bool {
 }
 
 pub fn list_worktrees(repo: &GitRepo) -> Result<Vec<Worktree>> {
-    let git_repo = repo
-        .repo
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Failed to lock repository"))?;
+    let git_repo = &repo.repo;
     let mut worktrees = Vec::new();
 
     // 1. Linked Worktrees

@@ -77,14 +77,6 @@ impl Config {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn save(&self, repo: &GitRepo) -> Result<()> {
-        let path = config_path(repo);
-        let contents = toml::to_string_pretty(self).context("Failed to serialize config")?;
-        std::fs::write(&path, contents)
-            .with_context(|| format!("Failed to write config to {}", path.display()))
-    }
-
     pub fn workspace_root(&self, repo: &GitRepo) -> PathBuf {
         let repo_name = repo
             .root
