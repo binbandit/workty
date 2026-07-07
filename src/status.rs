@@ -158,8 +158,10 @@ fn get_ahead_behind(
         Err(_) => return (None, None, None, false), // No upstream configured
     };
 
+    // Local-tracking upstreams (branch.<name>.remote = ".") live under refs/heads/
     let upstream_name = upstream_ref
         .strip_prefix("refs/remotes/")
+        .or_else(|| upstream_ref.strip_prefix("refs/heads/"))
         .unwrap_or(&upstream_ref)
         .to_string();
 
