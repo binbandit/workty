@@ -1,10 +1,11 @@
 use crate::git::GitRepo;
 use crate::status::WorktreeStatus;
 use crate::worktree::Worktree;
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Style};
 use serde::Serialize;
 use std::io::{self, Write};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug, Clone, Copy)]
 pub struct UiOptions {
@@ -20,6 +21,26 @@ impl Default for UiOptions {
             ascii: false,
             json: false,
         }
+    }
+}
+
+/// Global switch for the print_* helpers, set once at startup.
+static COLOR_ENABLED: AtomicBool = AtomicBool::new(true);
+
+pub fn set_color_enabled(enabled: bool) {
+    COLOR_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+fn color_enabled() -> bool {
+    COLOR_ENABLED.load(Ordering::Relaxed)
+}
+
+/// Returns `style` when color is enabled, otherwise a no-op style.
+fn style_if(color: bool, style: Style) -> Style {
+    if color {
+        style
+    } else {
+        Style::new()
     }
 }
 
@@ -77,7 +98,6 @@ pub fn print_worktree_list(
 
     let icons = Icons::from_options(opts);
 
-    // Calculate column widths
     let max_name_len = worktrees
         .iter()
         .map(|(wt, _)| wt.name().len())
@@ -85,94 +105,68 @@ pub fn print_worktree_list(
         .unwrap_or(10)
         .max(6); // minimum width for "BRANCH" header
 
-    // Print header
-    if opts.color {
-        println!(
-            "  {:width$}  {:>6}  {:>6}  {:>5}  {:>6}  {}",
-            "BRANCH".dimmed(),
-            "DIRTY".dimmed(),
-            "SYNC".dimmed(),
-            "AGE".dimmed(),
-            "REBASE".dimmed(),
-            "PATH".dimmed(),
-            width = max_name_len
-        );
-    } else {
-        println!(
-            "  {:width$}  {:>6}  {:>6}  {:>5}  {:>6}  {}",
-            "BRANCH",
-            "DIRTY",
-            "SYNC",
-            "AGE",
-            "REBASE",
-            "PATH",
-            width = max_name_len
-        );
-    }
+    let header = format!(
+        "  {:width$}  {:>6}  {:>6}  {:>5}  {:>6}  PATH",
+        "BRANCH",
+        "DIRTY",
+        "SYNC",
+        "AGE",
+        "REBASE",
+        width = max_name_len
+    );
+    println!("{}", header.style(style_if(opts.color, Style::new().dimmed())));
 
     for (wt, status) in worktrees {
         let is_current = wt.path == current_path;
 
+        // Pad every column as plain text first, then style it; formatting a
+        // string that already contains ANSI codes would count the codes as
+        // width and misalign the table.
         let marker = if is_current { icons.current } else { " " };
+        let name = format!("{:width$}", wt.name(), width = max_name_len);
+        let dirty = format!("{:>6}", format_dirty(status, &icons));
+        let sync = format!("{:>6}", format_sync(status, &icons));
+        let age = format!("{:>5}", format_time(status.last_commit_time));
+        let rebase = format!("{:>6}", format_rebase(status, &icons));
 
-        let name = wt.name();
-        let name_padded = format!("{:width$}", name, width = max_name_len);
-
-        let dirty_str = format_dirty(status, &icons, opts);
-        let sync_str = format_sync(status, &icons);
-        let time_str = format_time(status.last_commit_time);
-        let rebase_str = format_rebase(status, &icons, opts);
-        let path_str = shorten_path(&wt.path);
-
-        if opts.color {
-            let name_colored = if is_current {
-                name_padded.green().bold().to_string()
-            } else if status.is_dirty() {
-                name_padded.yellow().to_string()
-            } else {
-                name_padded.to_string()
-            };
-
-            let marker_colored = if is_current {
-                marker.green().bold().to_string()
-            } else {
-                marker.to_string()
-            };
-
-            println!(
-                "{} {}  {:>6}  {:>6}  {:>5}  {:>6}  {}",
-                marker_colored,
-                name_colored,
-                dirty_str,
-                sync_str,
-                time_str.dimmed(),
-                rebase_str,
-                path_str.dimmed()
-            );
+        let current_style = style_if(is_current && opts.color, Style::new().green().bold());
+        let name_style = if is_current {
+            current_style
         } else {
-            println!(
-                "{} {}  {:>6}  {:>6}  {:>5}  {:>6}  {}",
-                marker, name_padded, dirty_str, sync_str, time_str, rebase_str, path_str
-            );
-        }
+            style_if(status.is_dirty() && opts.color, Style::new().yellow())
+        };
+        let dirty_style = style_if(
+            opts.color,
+            if status.is_dirty() {
+                Style::new().yellow()
+            } else {
+                Style::new().green()
+            },
+        );
+        let rebase_style = style_if(
+            opts.color && status.needs_rebase(),
+            Style::new().red(),
+        );
+        let dim = style_if(opts.color, Style::new().dimmed());
+
+        println!(
+            "{} {}  {}  {}  {}  {}  {}",
+            marker.style(current_style),
+            name.style(name_style),
+            dirty.style(dirty_style),
+            sync,
+            age.style(dim),
+            rebase.style(rebase_style),
+            shorten_path(&wt.path).style(dim)
+        );
     }
 }
 
-fn format_dirty(status: &WorktreeStatus, icons: &Icons, opts: &UiOptions) -> String {
-    if status.dirty_count > 0 {
-        let s = format!("{} {:>3}", icons.dirty, status.dirty_count);
-        if opts.color {
-            s.yellow().to_string()
-        } else {
-            s
-        }
+fn format_dirty(status: &WorktreeStatus, icons: &Icons) -> String {
+    if status.is_dirty() {
+        format!("{} {:>3}", icons.dirty, status.dirty_count)
     } else {
-        let s = format!("{} {:>3}", icons.clean, "-");
-        if opts.color {
-            s.green().to_string()
-        } else {
-            s
-        }
+        format!("{} {:>3}", icons.clean, "-")
     }
 }
 
@@ -181,7 +175,7 @@ fn format_sync(status: &WorktreeStatus, icons: &Icons) -> String {
         (Some(a), Some(b)) => {
             format!("{}{} {}{}", icons.arrow_up, a, icons.arrow_down, b)
         }
-        _ => "  -  ".to_string(),
+        _ => "-".to_string(),
     }
 }
 
@@ -197,20 +191,10 @@ pub fn format_time(seconds: Option<i64>) -> String {
     }
 }
 
-fn format_rebase(status: &WorktreeStatus, icons: &Icons, opts: &UiOptions) -> String {
-    if let Some(n) = status.behind_main {
-        if n > 0 {
-            let s = format!("{} {:>3}", icons.rebase, n);
-            if opts.color {
-                s.red().to_string()
-            } else {
-                s
-            }
-        } else {
-            "    -".to_string()
-        }
-    } else {
-        "    -".to_string()
+fn format_rebase(status: &WorktreeStatus, icons: &Icons) -> String {
+    match status.behind_main {
+        Some(n) if n > 0 => format!("{} {:>3}", icons.rebase, n),
+        _ => "-".to_string(),
     }
 }
 
@@ -289,21 +273,26 @@ fn print_worktree_list_json(
 }
 
 pub fn print_error(msg: &str, hint: Option<&str>) {
+    let color = style_if(color_enabled(), Style::new().red().bold());
+    let hint_color = style_if(color_enabled(), Style::new().cyan());
+
     let stderr = io::stderr();
     let mut handle = stderr.lock();
 
-    let _ = writeln!(handle, "{}: {}", "error".red().bold(), msg);
+    let _ = writeln!(handle, "{}: {}", "error".style(color), msg);
     if let Some(h) = hint {
-        let _ = writeln!(handle, "{}: {}", "hint".cyan(), h);
+        let _ = writeln!(handle, "{}: {}", "hint".style(hint_color), h);
     }
 }
 
 pub fn print_success(msg: &str) {
-    eprintln!("{}: {}", "success".green().bold(), msg);
+    let style = style_if(color_enabled(), Style::new().green().bold());
+    eprintln!("{}: {}", "success".style(style), msg);
 }
 
 pub fn print_warning(msg: &str) {
-    eprintln!("{}: {}", "warning".yellow().bold(), msg);
+    let style = style_if(color_enabled(), Style::new().yellow().bold());
+    eprintln!("{}: {}", "warning".style(style), msg);
 }
 
 pub fn print_info(msg: &str) {

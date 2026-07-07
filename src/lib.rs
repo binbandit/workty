@@ -155,6 +155,7 @@ pub fn run_cli() {
         ascii: cli.ascii,
         json: cli.json,
     };
+    ui::set_color_enabled(ui_opts.color);
 
     let result = run(cli, &ui_opts);
 
