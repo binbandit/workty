@@ -44,7 +44,7 @@ pub fn generate_init(shell: ShellKind, wrap_git: bool, no_cd: bool) -> String {
 const POSIX_HELPERS: &str = r#"# wcd - fuzzy select and cd to a worktree
 wcd() {
     local dir
-    dir="$(git workty pick 2>/dev/null)"
+    dir="$(git workty pick)" || return $?
     if [ -n "$dir" ] && [ -d "$dir" ]; then
         cd "$dir" || return 1
     fi
@@ -57,7 +57,7 @@ wnew() {
         return 1
     fi
     local dir
-    dir="$(git workty new "$@" --print-path 2>/dev/null)"
+    dir="$(git workty new "$@" --print-path)" || return $?
     if [ -n "$dir" ] && [ -d "$dir" ]; then
         cd "$dir" || return 1
     fi
@@ -70,12 +70,9 @@ wgo() {
         return 1
     fi
     local dir
-    dir="$(git workty go "$1" 2>/dev/null)"
+    dir="$(git workty go "$1")" || return $?
     if [ -n "$dir" ] && [ -d "$dir" ]; then
         cd "$dir" || return 1
-    else
-        echo "Worktree not found: $1" >&2
-        return 1
     fi
 }
 
@@ -90,10 +87,10 @@ git() {
     local dir
     case "$2" in
         go|pick)
-            dir="$(command git workty "${@:2}" 2>/dev/null)"
+            dir="$(command git workty "${@:2}")" || return $?
             ;;
         new)
-            dir="$(command git workty "${@:2}" --print-path)"
+            dir="$(command git workty "${@:2}" --print-path)" || return $?
             ;;
         *)
             command git "$@"
@@ -102,8 +99,6 @@ git() {
     esac
     if [ -n "$dir" ] && [ -d "$dir" ]; then
         cd "$dir"
-    else
-        command git "$@"
     fi
 }
 
@@ -111,7 +106,7 @@ git() {
 
 const FISH_HELPERS: &str = r#"# wcd - fuzzy select and cd to a worktree
 function wcd
-    set -l dir (git workty pick 2>/dev/null)
+    set -l dir (git workty pick); or return $status
     if test -n "$dir" -a -d "$dir"
         cd "$dir"
     end
@@ -123,7 +118,7 @@ function wnew
         echo "Usage: wnew <branch-name>" >&2
         return 1
     end
-    set -l dir (git workty new $argv --print-path 2>/dev/null)
+    set -l dir (git workty new $argv --print-path); or return $status
     if test -n "$dir" -a -d "$dir"
         cd "$dir"
     end
@@ -135,12 +130,9 @@ function wgo
         echo "Usage: wgo <worktree-name>" >&2
         return 1
     end
-    set -l dir (git workty go $argv[1] 2>/dev/null)
+    set -l dir (git workty go $argv[1]); or return $status
     if test -n "$dir" -a -d "$dir"
         cd "$dir"
-    else
-        echo "Worktree not found: $argv[1]" >&2
-        return 1
     end
 end
 
@@ -154,18 +146,14 @@ function git --wraps git
     end
     switch $argv[2]
         case go pick
-            set -l dir (command git workty $argv[2..] 2>/dev/null)
+            set -l dir (command git workty $argv[2..]); or return $status
             if test -n "$dir" -a -d "$dir"
                 cd "$dir"
-            else
-                command git $argv
             end
         case new
-            set -l dir (command git workty $argv[2..] --print-path)
+            set -l dir (command git workty $argv[2..] --print-path); or return $status
             if test -n "$dir" -a -d "$dir"
                 cd "$dir"
-            else
-                command git $argv
             end
         case '*'
             command git $argv
@@ -176,7 +164,7 @@ end
 
 const POWERSHELL_HELPERS: &str = r#"# wcd - fuzzy select and cd to a worktree
 function wcd {
-    $dir = git workty pick 2>$null
+    $dir = git workty pick
     if ($dir -and (Test-Path $dir)) {
         Set-Location $dir
     }
@@ -185,7 +173,7 @@ function wcd {
 # wnew - create new worktree and cd into it
 function wnew {
     param([Parameter(Mandatory=$true)][string]$Name)
-    $dir = git workty new $Name --print-path 2>$null
+    $dir = git workty new $Name --print-path
     if ($dir -and (Test-Path $dir)) {
         Set-Location $dir
     }
@@ -194,11 +182,9 @@ function wnew {
 # wgo - go to a worktree by name
 function wgo {
     param([Parameter(Mandatory=$true)][string]$Name)
-    $dir = git workty go $Name 2>$null
+    $dir = git workty go $Name
     if ($dir -and (Test-Path $dir)) {
         Set-Location $dir
-    } else {
-        Write-Error "Worktree not found: $Name"
     }
 }
 
