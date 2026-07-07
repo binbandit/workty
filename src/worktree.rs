@@ -1,5 +1,6 @@
 use crate::git::GitRepo;
 use anyhow::{Context, Result};
+use rayon::prelude::*;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -39,61 +40,53 @@ pub fn same_path(p1: &Path, p2: &Path) -> bool {
 
 pub fn list_worktrees(repo: &GitRepo) -> Result<Vec<Worktree>> {
     let git_repo = &repo.repo;
-    let mut worktrees = Vec::new();
 
-    // 1. Linked Worktrees
+    // 1. Linked worktrees: gather cheap metadata under the main repo handle,
+    // then open each worktree repository (the slow part) in parallel.
     let worktree_names = git_repo.worktrees().context("Failed to list worktrees")?;
+    let mut entries = Vec::new();
     for name in worktree_names.iter().filter_map(|n| n.ok().flatten()) {
-        // git2::Worktree structure
         let wt = git_repo.find_worktree(name)?;
-        let path = wt.path().to_path_buf();
+        let prunable = wt.is_prunable(None).unwrap_or(false);
+        let locked = matches!(wt.is_locked(), Ok(git2::WorktreeLockStatus::Locked(_)));
+        entries.push((wt.path().to_path_buf(), locked, prunable));
+    }
 
-        let should_prune = wt.is_prunable(None).unwrap_or(false);
-        let is_locked = matches!(wt.is_locked(), Ok(git2::WorktreeLockStatus::Locked(_)));
-
-        // If prunable, we might not be able to open it
-        if should_prune {
-            worktrees.push(Worktree {
-                path,
+    let mut worktrees: Vec<Worktree> = entries
+        .into_par_iter()
+        .map(|(path, locked, prunable)| {
+            let broken = Worktree {
+                path: path.clone(),
                 head: String::new(),
                 branch: None,
                 branch_short: None,
                 detached: false,
-                locked: is_locked,
+                locked,
                 prunable: true,
-            });
-            continue;
-        }
+            };
 
-        // Try to open repo to get head info
-        // Note: Repository::open on a worktree path opens the worktree context
-        match git2::Repository::open(&path) {
-            Ok(wt_repo) => {
-                let (head, branch, branch_short, detached) = get_repo_head_info(&wt_repo);
-                worktrees.push(Worktree {
-                    path,
-                    head,
-                    branch,
-                    branch_short,
-                    detached,
-                    locked: is_locked,
-                    prunable: false,
-                });
+            // A prunable worktree usually can't be opened; a failed open is
+            // treated the same way.
+            if prunable {
+                return broken;
             }
-            Err(_) => {
-                // Could not open, maybe permissions or broken
-                worktrees.push(Worktree {
-                    path,
-                    head: String::new(),
-                    branch: None,
-                    branch_short: None,
-                    detached: false,
-                    locked: is_locked,
-                    prunable: true, // Treat as broken
-                });
+            match git2::Repository::open(&path) {
+                Ok(wt_repo) => {
+                    let (head, branch, branch_short, detached) = get_repo_head_info(&wt_repo);
+                    Worktree {
+                        path,
+                        head,
+                        branch,
+                        branch_short,
+                        detached,
+                        locked,
+                        prunable: false,
+                    }
+                }
+                Err(_) => broken,
             }
-        }
-    }
+        })
+        .collect();
 
     // 2. Main Worktree (the parent of the shared .git dir; never in the linked list)
     let common_dir = git_repo.commondir();
