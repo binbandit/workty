@@ -2,8 +2,8 @@ use crate::Cli;
 use anyhow::{Context, Result};
 use clap::CommandFactory;
 use clap_mangen::Man;
-use dialoguer::theme::ColorfulTheme;
 use dialoguer::Confirm;
+use dialoguer::theme::ColorfulTheme;
 use std::fs;
 
 pub fn execute(yes: bool) -> Result<()> {

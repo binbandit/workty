@@ -1,6 +1,6 @@
 use crate::git::GitRepo;
 use crate::worktree::{find_worktree, list_worktrees};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 #[derive(Debug, clap::Args)]
 pub struct GoArgs {

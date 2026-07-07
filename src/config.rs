@@ -114,7 +114,8 @@ fn compute_repo_id(repo: &GitRepo) -> String {
     let mut hasher = Sha256::new();
     hasher.update(normalized.as_bytes());
     let result = hasher.finalize();
-    hex::encode(&result[..4])
+    // 8 lowercase hex chars; must stay stable, existing worktree paths embed it
+    result[..4].iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 fn normalize_url(url: &str) -> String {

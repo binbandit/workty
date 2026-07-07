@@ -38,7 +38,7 @@ impl GitRepo {
         self.repo
             .find_remote("origin")
             .ok()
-            .and_then(|remote| remote.url().map(|s| s.to_string()))
+            .and_then(|remote| remote.url().ok().map(|s| s.to_string()))
     }
 
     pub fn default_branch(&self) -> Option<String> {

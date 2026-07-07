@@ -37,11 +37,7 @@ fn color_enabled() -> bool {
 
 /// Returns `style` when color is enabled, otherwise a no-op style.
 fn style_if(color: bool, style: Style) -> Style {
-    if color {
-        style
-    } else {
-        Style::new()
-    }
+    if color { style } else { Style::new() }
 }
 
 pub struct Icons {
@@ -114,7 +110,10 @@ pub fn print_worktree_list(
         "REBASE",
         width = max_name_len
     );
-    println!("{}", header.style(style_if(opts.color, Style::new().dimmed())));
+    println!(
+        "{}",
+        header.style(style_if(opts.color, Style::new().dimmed()))
+    );
 
     for (wt, status) in worktrees {
         let is_current = wt.path == current_path;
@@ -143,10 +142,7 @@ pub fn print_worktree_list(
                 Style::new().green()
             },
         );
-        let rebase_style = style_if(
-            opts.color && status.needs_rebase(),
-            Style::new().red(),
-        );
+        let rebase_style = style_if(opts.color && status.needs_rebase(), Style::new().red());
         let dim = style_if(opts.color, Style::new().dimmed());
 
         println!(

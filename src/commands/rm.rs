@@ -2,7 +2,7 @@ use crate::git::GitRepo;
 use crate::status::is_worktree_dirty;
 use crate::ui::{print_success, print_warning};
 use crate::worktree::{find_worktree, list_worktrees, same_path};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use dialoguer::Confirm;
 use std::io::IsTerminal;
 use std::process::Command;

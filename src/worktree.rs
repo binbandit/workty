@@ -43,7 +43,7 @@ pub fn list_worktrees(repo: &GitRepo) -> Result<Vec<Worktree>> {
 
     // 1. Linked Worktrees
     let worktree_names = git_repo.worktrees().context("Failed to list worktrees")?;
-    for name in worktree_names.iter().flatten() {
+    for name in worktree_names.iter().filter_map(|n| n.ok().flatten()) {
         // git2::Worktree structure
         let wt = git_repo.find_worktree(name)?;
         let path = wt.path().to_path_buf();
@@ -123,12 +123,12 @@ fn get_repo_head_info(repo: &git2::Repository) -> (String, Option<String>, Optio
         Ok(r) => {
             let head_oid = r.target().map(|o| o.to_string()).unwrap_or_default();
             let detached = repo.head_detached().unwrap_or(false);
-            let name = r.name().map(|s| s.to_string());
+            let name = r.name().ok().map(|s| s.to_string());
 
             if detached {
                 (head_oid, None, None, true)
             } else {
-                let shorthand = r.shorthand().map(|s| s.to_string());
+                let shorthand = r.shorthand().ok().map(|s| s.to_string());
                 (head_oid, name, shorthand, false)
             }
         }

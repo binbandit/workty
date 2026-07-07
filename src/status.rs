@@ -143,18 +143,18 @@ fn get_ahead_behind(
     };
 
     let head_refname = match head.name() {
-        Some(name) => name,
-        None => return (None, None, None, false),
+        Ok(name) => name,
+        Err(_) => return (None, None, None, false),
     };
 
     // Resolve the upstream from config rather than the ref itself: when the
     // remote branch has been deleted (and pruned), the ref is gone but the
     // config remains, which is exactly how we detect a "gone" upstream.
-    let upstream_ref = match repo.branch_upstream_name(head_refname) {
-        Ok(buf) => match buf.as_str() {
-            Some(s) => s.to_string(),
-            None => return (None, None, None, false),
-        },
+    let upstream_ref = match repo
+        .branch_upstream_name(head_refname)
+        .and_then(|buf| buf.as_str().map(|s| s.to_string()))
+    {
+        Ok(s) => s,
         Err(_) => return (None, None, None, false), // No upstream configured
     };
 
@@ -168,7 +168,11 @@ fn get_ahead_behind(
         None => return (Some(upstream_name), None, None, false),
     };
 
-    let upstream_oid = match repo.find_reference(&upstream_ref).ok().and_then(|r| r.target()) {
+    let upstream_oid = match repo
+        .find_reference(&upstream_ref)
+        .ok()
+        .and_then(|r| r.target())
+    {
         Some(oid) => oid,
         // Upstream is configured but its ref no longer exists - it was deleted
         None => return (Some(upstream_name), None, None, true),

@@ -1,4 +1,4 @@
-use crate::shell::{generate_init, ShellKind};
+use crate::shell::{ShellKind, generate_init};
 
 #[derive(Debug, clap::Args)]
 pub struct InitArgs {

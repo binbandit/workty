@@ -15,7 +15,11 @@ pub fn execute(repo: &GitRepo, all: bool) -> Result<()> {
 
     let remote_names: Vec<String> = if all {
         let remotes = repo.repo.remotes().context("Failed to list remotes")?;
-        remotes.iter().flatten().map(|s| s.to_string()).collect()
+        remotes
+            .iter()
+            .filter_map(|s| s.ok().flatten())
+            .map(|s| s.to_string())
+            .collect()
     } else {
         // Just fetch origin by default
         vec!["origin".to_string()]

@@ -1,5 +1,5 @@
-use crate::config::{config_exists, Config};
-use crate::git::{is_git_installed, is_in_git_repo, GitRepo};
+use crate::config::{Config, config_exists};
+use crate::git::{GitRepo, is_git_installed, is_in_git_repo};
 use crate::worktree::list_worktrees;
 use owo_colors::OwoColorize;
 use std::path::Path;

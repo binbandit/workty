@@ -1,5 +1,5 @@
 use clap::CommandFactory;
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 use std::io;
 
 pub fn execute<C: CommandFactory>(shell: Shell) {

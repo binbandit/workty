@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::git::GitRepo;
 use crate::ui::{print_info, print_success};
 use crate::worktree::{list_worktrees, slug_from_branch};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -184,11 +184,7 @@ fn get_upstream(repo: &GitRepo, branch: &str) -> Option<String> {
 
     if output.status.success() {
         let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if s.is_empty() {
-            None
-        } else {
-            Some(s)
-        }
+        if s.is_empty() { None } else { Some(s) }
     } else {
         None
     }

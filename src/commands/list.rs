@@ -1,8 +1,8 @@
 use crate::git::GitRepo;
 use crate::status::WorktreeStatus;
 use crate::status::{get_all_statuses, get_all_statuses_fast};
-use crate::ui::{print_worktree_list, UiOptions};
-use crate::worktree::{list_worktrees, Worktree};
+use crate::ui::{UiOptions, print_worktree_list};
+use crate::worktree::{Worktree, list_worktrees};
 use anyhow::Result;
 use std::path::PathBuf;
 

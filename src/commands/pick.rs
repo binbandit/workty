@@ -1,8 +1,8 @@
 use crate::git::GitRepo;
 use crate::status::get_all_statuses;
-use crate::ui::{format_time, UiOptions};
+use crate::ui::{UiOptions, format_time};
 use crate::worktree::list_worktrees;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use console::Term;
 use dialoguer::FuzzySelect;
 use std::io::IsTerminal;

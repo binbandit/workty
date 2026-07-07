@@ -3,7 +3,7 @@ use crate::gh::{checkout_pr, get_pr_branch, is_gh_authenticated, is_gh_installed
 use crate::git::GitRepo;
 use crate::ui::{print_info, print_success};
 use crate::worktree::{list_worktrees, slug_from_branch};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::process::Command;
 
 #[derive(Debug, clap::Args)]
