@@ -23,15 +23,14 @@ impl Worktree {
     }
 
     pub fn is_main_worktree(&self, repo: &GitRepo) -> bool {
-        // Simple check: if path matches main repo root
-        // We find main repo root via common dir usually.
-        // Assuming common_dir parent is main root works for standard layouts.
-        repo.common_dir.parent() == Some(&self.path) || check_same_path(&self.path, &repo.root)
-        // Or compare with assumed main root logic
+        // The main worktree is the parent of the shared .git directory.
+        repo.common_dir
+            .parent()
+            .is_some_and(|main_root| same_path(&self.path, main_root))
     }
 }
 
-fn check_same_path(p1: &Path, p2: &Path) -> bool {
+pub fn same_path(p1: &Path, p2: &Path) -> bool {
     match (p1.canonicalize(), p2.canonicalize()) {
         (Ok(c1), Ok(c2)) => c1 == c2,
         _ => false, // If either fails to canonicalize, they're not the same
@@ -99,30 +98,12 @@ pub fn list_worktrees(repo: &GitRepo) -> Result<Vec<Worktree>> {
         }
     }
 
-    // 2. Main Worktree
-    // We need to identify the main worktree.
-    // Logic: find common_dir, parent is main worktree.
-    let common_dir = if git_repo.is_worktree() {
-        // If we are in a worktree, path is .../.git/worktrees/name
-        git_repo
-            .path()
-            .parent()
-            .and_then(|p| p.parent())
-            .unwrap_or(git_repo.path())
-    } else {
-        // If we are in main, path is .../.git
-        git_repo.path()
-    };
-
+    // 2. Main Worktree (the parent of the shared .git dir; never in the linked list)
+    let common_dir = git_repo.commondir();
     let main_path = common_dir.parent().unwrap_or(common_dir);
 
-    // Add Main Worktree if not already added (though main usually not in linked list)
-    // We open main path to verify and get status
     if let Ok(main_repo) = git2::Repository::open(main_path) {
-        if !worktrees
-            .iter()
-            .any(|w| check_same_path(&w.path, main_path))
-        {
+        if !worktrees.iter().any(|w| same_path(&w.path, main_path)) {
             let (head, branch, branch_short, detached) = get_repo_head_info(&main_repo);
             worktrees.push(Worktree {
                 path: main_path.to_path_buf(),

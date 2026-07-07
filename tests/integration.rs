@@ -211,6 +211,31 @@ fn test_rm_with_force() {
 }
 
 #[test]
+fn test_rm_protects_main_worktree_from_linked_worktree() {
+    let temp = TempDir::new().unwrap();
+    let repo_dir = temp.path();
+
+    git_init_repo(repo_dir);
+
+    let new_output = workty_success(repo_dir, &["new", "side-branch", "--print-path"]);
+    let wt_path = std::path::PathBuf::from(new_output.trim());
+
+    // Running from inside the linked worktree, the main worktree must still be
+    // recognized as main and protected from removal.
+    let rm_output = workty(&wt_path, &["rm", "main", "--yes"]);
+    assert!(
+        !rm_output.status.success(),
+        "rm should refuse to remove the main worktree"
+    );
+    let stderr = String::from_utf8_lossy(&rm_output.stderr);
+    assert!(
+        stderr.contains("main worktree"),
+        "Error should mention the main worktree: {}",
+        stderr
+    );
+}
+
+#[test]
 fn test_clean_dry_run() {
     let temp = TempDir::new().unwrap();
     let repo_dir = temp.path();

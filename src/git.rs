@@ -25,8 +25,9 @@ impl GitRepo {
             .map(PathBuf::from)
             .unwrap_or_else(|| repo.path().to_path_buf());
 
-        // git2 path() returns the effective .git directory
-        let common_dir = repo.path().to_path_buf();
+        // The common dir is shared across all worktrees (the main repo's .git),
+        // unlike path() which points at .git/worktrees/<name> for linked worktrees.
+        let common_dir = repo.commondir().to_path_buf();
 
         Ok(Self {
             repo: Mutex::new(repo),

@@ -1,7 +1,7 @@
 use crate::git::GitRepo;
 use crate::status::is_worktree_dirty;
 use crate::ui::{print_success, print_warning};
-use crate::worktree::{find_worktree, list_worktrees};
+use crate::worktree::{find_worktree, list_worktrees, same_path};
 use anyhow::{bail, Context, Result};
 use dialoguer::Confirm;
 use is_terminal::IsTerminal;
@@ -25,7 +25,7 @@ pub fn execute(repo: &GitRepo, opts: RmOptions) -> Result<()> {
     })?;
 
     let current_path = std::env::current_dir().context("Failed to get current directory")?;
-    if wt.path == current_path {
+    if same_path(&wt.path, &current_path) {
         bail!("Cannot remove the current worktree. Change to a different worktree first.");
     }
 

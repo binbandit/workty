@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::git::GitRepo;
 use crate::status::{get_all_statuses, is_worktree_dirty};
 use crate::ui::{print_info, print_success, print_warning};
-use crate::worktree::{list_worktrees, Worktree};
+use crate::worktree::{list_worktrees, same_path, Worktree};
 use anyhow::{bail, Context, Result};
 use dialoguer::Confirm;
 use is_terminal::IsTerminal;
@@ -51,7 +51,7 @@ pub fn execute(repo: &GitRepo, opts: CleanOptions) -> Result<()> {
     let candidates: Vec<&Worktree> = worktrees
         .iter()
         .filter(|wt| {
-            if wt.path == current_path {
+            if same_path(&wt.path, &current_path) {
                 return false;
             }
 
