@@ -15,6 +15,10 @@ pub struct Config {
     pub root: String,
     pub layout: String,
     pub open_cmd: Option<String>,
+    /// Fetch the base branch's upstream before creating a worktree
+    pub auto_fetch: bool,
+    /// Push new branches to origin to set their upstream
+    pub auto_push: bool,
 }
 
 impl Default for Config {
@@ -25,6 +29,8 @@ impl Default for Config {
             root: "~/.workty/{repo}-{id}".to_string(),
             layout: "flat".to_string(),
             open_cmd: None,
+            auto_fetch: true,
+            auto_push: true,
         }
     }
 }
@@ -178,11 +184,10 @@ mod tests {
     #[test]
     fn test_config_roundtrip() {
         let config = Config {
-            version: 1,
             base: "develop".to_string(),
             root: "~/.worktrees/{repo}".to_string(),
-            layout: "flat".to_string(),
             open_cmd: Some("code".to_string()),
+            ..Config::default()
         };
 
         let serialized = toml::to_string_pretty(&config).unwrap();

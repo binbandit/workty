@@ -74,6 +74,8 @@ Optional. Lives in `.git/workty.toml`:
 base = "main"                    # default branch for new worktrees
 root = "~/.workty/{repo}-{id}"   # where worktrees go
 open_cmd = "code"                # editor for --open flag
+auto_fetch = true                # fetch base upstream before `new` (set false for offline/speed)
+auto_push = true                 # push new branches to origin to set upstream
 ```
 
 ## Why not just...

@@ -4,7 +4,7 @@ use crate::ui::{print_info, print_success};
 use crate::worktree::{list_worktrees, slug_from_branch};
 use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 #[derive(Debug, clap::Args)]
 pub struct NewArgs {
@@ -94,8 +94,8 @@ pub fn execute(repo: &GitRepo, opts: NewArgs) -> Result<()> {
         }
     } else {
         // Try to fetch upstream of base to ensure we are up to date
-        if !opts.no_fetch {
-            if let Some(upstream) = get_upstream(repo, &base) {
+        if !opts.no_fetch && config.auto_fetch {
+            if let Some(upstream) = base_upstream(repo, &base) {
                 print_info(&format!("Fetching {} to ensure fresh start...", upstream));
 
                 // upstream is likely "origin/main", we want to split to "origin" "main"
@@ -121,26 +121,56 @@ pub fn execute(repo: &GitRepo, opts: NewArgs) -> Result<()> {
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8: {:?}", worktree_path))?;
 
+        // Create the branch up front so the upstream push can run while the
+        // worktree checkout does; those are the two slow steps (network and
+        // disk), and neither depends on the other.
         let output = Command::new("git")
             .current_dir(&repo.root)
-            .args(["worktree", "add", "-b", branch_name, path_str, &base])
+            .args(["branch", branch_name, &base])
+            .output()
+            .context("Failed to create branch")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("Failed to create branch: {}", stderr.trim());
+        }
+
+        let mut push = None;
+        if !opts.no_push && config.auto_push && repo.origin_url().is_some() {
+            print_info("Setting upstream...");
+            push = Command::new("git")
+                .current_dir(&repo.root)
+                .args(["push", "-u", "origin", branch_name])
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn()
+                .ok();
+            if push.is_none() {
+                print_info("Note: Could not run git push to set upstream");
+            }
+        }
+
+        let output = Command::new("git")
+            .current_dir(&repo.root)
+            .args(["worktree", "add", path_str, branch_name])
             .output()
             .context("Failed to create worktree")?;
 
         if !output.status.success() {
+            // Reap the in-flight push, then undo the branch we just created
+            if let Some(child) = push {
+                let _ = child.wait_with_output();
+            }
+            let _ = Command::new("git")
+                .current_dir(&repo.root)
+                .args(["branch", "-D", branch_name])
+                .output();
             let stderr = String::from_utf8_lossy(&output.stderr);
             bail!("Failed to create worktree: {}", stderr.trim());
         }
 
-        // Try to set upstream (unless --no-push)
-        if !opts.no_push {
-            print_info("Setting upstream...");
-            let push_res = Command::new("git")
-                .current_dir(&repo.root)
-                .args(["push", "-u", "origin", branch_name])
-                .output();
-
-            match push_res {
+        if let Some(child) = push {
+            match child.wait_with_output() {
                 Ok(p) if p.status.success() => {
                     print_success("Upstream set successfully");
                 }
@@ -170,22 +200,14 @@ pub fn execute(repo: &GitRepo, opts: NewArgs) -> Result<()> {
     Ok(())
 }
 
-fn get_upstream(repo: &GitRepo, branch: &str) -> Option<String> {
-    let output = Command::new("git")
-        .current_dir(&repo.root)
-        .args([
-            "rev-parse",
-            "--abbrev-ref",
-            "--symbolic-full-name",
-            &format!("{}@{{u}}", branch),
-        ])
-        .output()
-        .ok()?;
-
-    if output.status.success() {
-        let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if s.is_empty() { None } else { Some(s) }
-    } else {
-        None
-    }
+/// Short upstream name of a local branch (e.g. "origin/main"), if configured.
+fn base_upstream(repo: &GitRepo, base: &str) -> Option<String> {
+    let refname = format!("refs/heads/{}", base);
+    let buf = repo.repo.branch_upstream_name(&refname).ok()?;
+    let name = buf.as_str().ok()?;
+    Some(
+        name.strip_prefix("refs/remotes/")
+            .unwrap_or(name)
+            .to_string(),
+    )
 }
