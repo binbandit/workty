@@ -7,23 +7,41 @@ pub enum ShellKind {
     Powershell,
 }
 
+impl ShellKind {
+    fn name(self) -> &'static str {
+        match self {
+            ShellKind::Bash => "bash",
+            ShellKind::Zsh => "zsh",
+            ShellKind::Fish => "fish",
+            ShellKind::Powershell => "PowerShell",
+        }
+    }
+}
+
 pub fn generate_init(shell: ShellKind, wrap_git: bool, no_cd: bool) -> String {
-    match shell {
-        ShellKind::Bash => generate_bash(wrap_git, no_cd),
-        ShellKind::Zsh => generate_zsh(wrap_git, no_cd),
-        ShellKind::Fish => generate_fish(wrap_git, no_cd),
-        ShellKind::Powershell => generate_powershell(wrap_git, no_cd),
-    }
-}
-
-fn generate_bash(wrap_git: bool, no_cd: bool) -> String {
-    let mut output = String::new();
-
-    output.push_str("# git-workty shell integration for bash\n\n");
+    let mut output = format!("# git-workty shell integration for {}\n\n", shell.name());
 
     if !no_cd {
-        output.push_str(
-            r#"# wcd - fuzzy select and cd to a worktree
+        output.push_str(match shell {
+            // The same script is valid in both bash and zsh
+            ShellKind::Bash | ShellKind::Zsh => POSIX_HELPERS,
+            ShellKind::Fish => FISH_HELPERS,
+            ShellKind::Powershell => POWERSHELL_HELPERS,
+        });
+    }
+
+    if wrap_git {
+        output.push_str(match shell {
+            ShellKind::Bash | ShellKind::Zsh => POSIX_GIT_WRAPPER,
+            ShellKind::Fish => FISH_GIT_WRAPPER,
+            ShellKind::Powershell => POWERSHELL_GIT_WRAPPER,
+        });
+    }
+
+    output
+}
+
+const POSIX_HELPERS: &str = r#"# wcd - fuzzy select and cd to a worktree
 wcd() {
     local dir
     dir="$(git workty pick 2>/dev/null)"
@@ -61,165 +79,37 @@ wgo() {
     fi
 }
 
-"#,
-        );
-    }
+"#;
 
-    if wrap_git {
-        output.push_str(
-            r#"# git wrapper that auto-cds for workty commands
+const POSIX_GIT_WRAPPER: &str = r#"# git wrapper that auto-cds for workty commands
 git() {
-    if [ "$1" = "workty" ]; then
-        case "$2" in
-            go)
-                local dir
-                dir="$(command git workty go "${@:3}" 2>/dev/null)"
-                if [ -n "$dir" ] && [ -d "$dir" ]; then
-                    cd "$dir"
-                else
-                    command git "$@"
-                fi
-                ;;
-            pick)
-                local dir
-                dir="$(command git workty pick 2>/dev/null)"
-                if [ -n "$dir" ] && [ -d "$dir" ]; then
-                    cd "$dir"
-                else
-                    command git "$@"
-                fi
-                ;;
-            new)
-                local dir
-                dir="$(command git workty new "${@:3}" --print-path)"
-                if [ -n "$dir" ] && [ -d "$dir" ]; then
-                    cd "$dir"
-                else
-                    command git "$@"
-                fi
-                ;;
-            *)
-                command git "$@"
-                ;;
-        esac
+    if [ "$1" != "workty" ]; then
+        command git "$@"
+        return
+    fi
+    local dir
+    case "$2" in
+        go|pick)
+            dir="$(command git workty "${@:2}" 2>/dev/null)"
+            ;;
+        new)
+            dir="$(command git workty "${@:2}" --print-path)"
+            ;;
+        *)
+            command git "$@"
+            return
+            ;;
+    esac
+    if [ -n "$dir" ] && [ -d "$dir" ]; then
+        cd "$dir"
     else
         command git "$@"
     fi
 }
 
-"#,
-        );
-    }
+"#;
 
-    output
-}
-
-fn generate_zsh(wrap_git: bool, no_cd: bool) -> String {
-    let mut output = String::new();
-
-    output.push_str("# git-workty shell integration for zsh\n\n");
-
-    if !no_cd {
-        output.push_str(
-            r#"# wcd - fuzzy select and cd to a worktree
-wcd() {
-    local dir
-    dir="$(git workty pick 2>/dev/null)"
-    if [[ -n "$dir" ]] && [[ -d "$dir" ]]; then
-        cd "$dir"
-    fi
-}
-
-# wnew - create new worktree and cd into it
-wnew() {
-    if [[ -z "$1" ]]; then
-        echo "Usage: wnew <branch-name>" >&2
-        return 1
-    fi
-    local dir
-    dir="$(git workty new "$@" --print-path 2>/dev/null)"
-    if [[ -n "$dir" ]] && [[ -d "$dir" ]]; then
-        cd "$dir"
-    fi
-}
-
-# wgo - go to a worktree by name
-wgo() {
-    if [[ -z "$1" ]]; then
-        echo "Usage: wgo <worktree-name>" >&2
-        return 1
-    fi
-    local dir
-    dir="$(git workty go "$1" 2>/dev/null)"
-    if [[ -n "$dir" ]] && [[ -d "$dir" ]]; then
-        cd "$dir"
-    else
-        echo "Worktree not found: $1" >&2
-        return 1
-    fi
-}
-
-"#,
-        );
-    }
-
-    if wrap_git {
-        output.push_str(
-            r#"# git wrapper that auto-cds for workty commands
-git() {
-    if [[ "$1" == "workty" ]]; then
-        case "$2" in
-            go)
-                local dir
-                dir="$(command git workty go "${@:3}" 2>/dev/null)"
-                if [[ -n "$dir" ]] && [[ -d "$dir" ]]; then
-                    cd "$dir"
-                else
-                    command git "$@"
-                fi
-                ;;
-            pick)
-                local dir
-                dir="$(command git workty pick 2>/dev/null)"
-                if [[ -n "$dir" ]] && [[ -d "$dir" ]]; then
-                    cd "$dir"
-                else
-                    command git "$@"
-                fi
-                ;;
-            new)
-                local dir
-                dir="$(command git workty new "${@:3}" --print-path)"
-                if [[ -n "$dir" ]] && [[ -d "$dir" ]]; then
-                    cd "$dir"
-                else
-                    command git "$@"
-                fi
-                ;;
-            *)
-                command git "$@"
-                ;;
-        esac
-    else
-        command git "$@"
-    fi
-}
-
-"#,
-        );
-    }
-
-    output
-}
-
-fn generate_fish(wrap_git: bool, no_cd: bool) -> String {
-    let mut output = String::new();
-
-    output.push_str("# git-workty shell integration for fish\n\n");
-
-    if !no_cd {
-        output.push_str(
-            r#"# wcd - fuzzy select and cd to a worktree
+const FISH_HELPERS: &str = r#"# wcd - fuzzy select and cd to a worktree
 function wcd
     set -l dir (git workty pick 2>/dev/null)
     if test -n "$dir" -a -d "$dir"
@@ -254,60 +144,37 @@ function wgo
     end
 end
 
-"#,
-        );
-    }
+"#;
 
-    if wrap_git {
-        output.push_str(
-            r#"# git wrapper that auto-cds for workty commands
+const FISH_GIT_WRAPPER: &str = r#"# git wrapper that auto-cds for workty commands
 function git --wraps git
-    if test "$argv[1]" = "workty"
-        switch $argv[2]
-            case go
-                set -l dir (command git workty go $argv[3..] 2>/dev/null)
-                if test -n "$dir" -a -d "$dir"
-                    cd "$dir"
-                else
-                    command git $argv
-                end
-            case pick
-                set -l dir (command git workty pick 2>/dev/null)
-                if test -n "$dir" -a -d "$dir"
-                    cd "$dir"
-                else
-                    command git $argv
-                end
-            case new
-                set -l dir (command git workty new $argv[3..] --print-path)
-                if test -n "$dir" -a -d "$dir"
-                    cd "$dir"
-                else
-                    command git $argv
-                end
-            case '*'
-                command git $argv
-        end
-    else
+    if test "$argv[1]" != workty
         command git $argv
+        return
+    end
+    switch $argv[2]
+        case go pick
+            set -l dir (command git workty $argv[2..] 2>/dev/null)
+            if test -n "$dir" -a -d "$dir"
+                cd "$dir"
+            else
+                command git $argv
+            end
+        case new
+            set -l dir (command git workty $argv[2..] --print-path)
+            if test -n "$dir" -a -d "$dir"
+                cd "$dir"
+            else
+                command git $argv
+            end
+        case '*'
+            command git $argv
     end
 end
 
-"#,
-        );
-    }
+"#;
 
-    output
-}
-
-fn generate_powershell(wrap_git: bool, no_cd: bool) -> String {
-    let mut output = String::new();
-
-    output.push_str("# git-workty shell integration for PowerShell\n\n");
-
-    if !no_cd {
-        output.push_str(
-            r#"# wcd - fuzzy select and cd to a worktree
+const POWERSHELL_HELPERS: &str = r#"# wcd - fuzzy select and cd to a worktree
 function wcd {
     $dir = git workty pick 2>$null
     if ($dir -and (Test-Path $dir)) {
@@ -335,18 +202,9 @@ function wgo {
     }
 }
 
-"#,
-        );
-    }
+"#;
 
-    if wrap_git {
-        output.push_str(
-            r#"# Note: Git wrapper for PowerShell requires more complex setup.
+const POWERSHELL_GIT_WRAPPER: &str = r#"# Note: Git wrapper for PowerShell requires more complex setup.
 # Consider using the wcd, wnew, and wgo functions directly.
 
-"#,
-        );
-    }
-
-    output
-}
+"#;
