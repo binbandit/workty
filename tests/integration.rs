@@ -261,6 +261,62 @@ fn test_clean_dry_run() {
 }
 
 #[test]
+fn test_no_color_env_accepts_any_value() {
+    let temp = TempDir::new().unwrap();
+    git_init_repo(temp.path());
+
+    // Per the NO_COLOR spec, any non-empty value disables color; it must
+    // never cause an argument parse error.
+    let binary = env!("CARGO_BIN_EXE_git-workty");
+    let output = Command::new(binary)
+        .current_dir(temp.path())
+        .env("NO_COLOR", "abc")
+        .arg("list")
+        .output()
+        .expect("Failed to execute git-workty");
+
+    assert!(
+        output.status.success(),
+        "list should succeed with NO_COLOR=abc: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_clean_gone_detects_deleted_upstream() {
+    let temp = TempDir::new().unwrap();
+    let origin_dir = temp.path().join("origin.git");
+    let repo_dir = temp.path().join("repo");
+    std::fs::create_dir_all(&origin_dir).unwrap();
+    std::fs::create_dir_all(&repo_dir).unwrap();
+
+    git(&origin_dir, &["init", "--bare", "-b", "main"]);
+    git_init_repo(&repo_dir);
+    git(
+        &repo_dir,
+        &["remote", "add", "origin", origin_dir.to_str().unwrap()],
+    );
+    git(&repo_dir, &["push", "-u", "origin", "main"]);
+
+    // Create a worktree whose branch tracks a remote branch, then delete the
+    // remote branch and prune.
+    let wt_path = workty_success(&repo_dir, &["new", "doomed", "--print-path"]);
+    git(
+        std::path::Path::new(wt_path.trim()),
+        &["push", "-u", "origin", "doomed"],
+    );
+    git(&repo_dir, &["push", "origin", "--delete", "doomed"]);
+    git(&repo_dir, &["fetch", "--prune", "origin"]);
+
+    let output = workty_success(&repo_dir, &["clean", "--gone", "--dry-run"]);
+    assert!(
+        output.contains("doomed"),
+        "clean --gone should list the worktree with a deleted upstream: {}",
+        output
+    );
+}
+
+#[test]
 fn test_doctor_runs() {
     let temp = TempDir::new().unwrap();
     let repo_dir = temp.path();

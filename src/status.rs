@@ -112,51 +112,46 @@ fn get_ahead_behind(
         return (None, None, None, false);
     }
 
-    // Get the current branch
     let head = match repo.head() {
-        Ok(h) => h,
-        Err(_) => return (None, None, None, false),
+        Ok(h) if h.is_branch() => h,
+        _ => return (None, None, None, false),
     };
 
-    if !head.is_branch() {
-        return (None, None, None, false);
-    }
-
-    let branch_name = match head.shorthand() {
+    let head_refname = match head.name() {
         Some(name) => name,
         None => return (None, None, None, false),
     };
 
-    // Find the local branch and its upstream
-    let branch = match repo.find_branch(branch_name, git2::BranchType::Local) {
-        Ok(b) => b,
-        Err(_) => return (None, None, None, false),
-    };
-
-    let upstream_branch = match branch.upstream() {
-        Ok(u) => u,
+    // Resolve the upstream from config rather than the ref itself: when the
+    // remote branch has been deleted (and pruned), the ref is gone but the
+    // config remains, which is exactly how we detect a "gone" upstream.
+    let upstream_ref = match repo.branch_upstream_name(head_refname) {
+        Ok(buf) => match buf.as_str() {
+            Some(s) => s.to_string(),
+            None => return (None, None, None, false),
+        },
         Err(_) => return (None, None, None, false), // No upstream configured
     };
 
-    let upstream_name = upstream_branch.name().ok().flatten().map(|s| s.to_string());
+    let upstream_name = upstream_ref
+        .strip_prefix("refs/remotes/")
+        .unwrap_or(&upstream_ref)
+        .to_string();
 
-    // Get the OIDs for both branches
     let local_oid = match head.target() {
         Some(oid) => oid,
-        None => return (upstream_name, None, None, false),
+        None => return (Some(upstream_name), None, None, false),
     };
 
-    let upstream_oid = match upstream_branch.get().target() {
+    let upstream_oid = match repo.find_reference(&upstream_ref).ok().and_then(|r| r.target()) {
         Some(oid) => oid,
-        // Upstream ref exists but points to nothing - upstream is gone
-        None => return (upstream_name, None, None, true),
+        // Upstream is configured but its ref no longer exists - it was deleted
+        None => return (Some(upstream_name), None, None, true),
     };
 
-    // Use git2's graph_ahead_behind - this is the key performance improvement
     match repo.graph_ahead_behind(local_oid, upstream_oid) {
-        Ok((ahead, behind)) => (upstream_name, Some(ahead), Some(behind), false),
-        // If graph calculation fails, upstream might be gone
-        Err(_) => (upstream_name, None, None, true),
+        Ok((ahead, behind)) => (Some(upstream_name), Some(ahead), Some(behind), false),
+        Err(_) => (Some(upstream_name), None, None, false),
     }
 }
 

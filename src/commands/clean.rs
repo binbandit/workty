@@ -5,7 +5,7 @@ use crate::ui::{print_info, print_success, print_warning};
 use crate::worktree::{list_worktrees, same_path, Worktree};
 use anyhow::{bail, Context, Result};
 use dialoguer::Confirm;
-use is_terminal::IsTerminal;
+use std::io::IsTerminal;
 use std::process::Command;
 
 pub struct CleanOptions {

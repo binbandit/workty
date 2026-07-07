@@ -45,8 +45,8 @@ SHELL INTEGRATION:
 #[command(author, version, about = ABOUT, after_help = AFTER_HELP)]
 #[command(propagate_version = true)]
 pub struct Cli {
-    /// Disable colored output
-    #[arg(long, global = true, env = "NO_COLOR")]
+    /// Disable colored output (also respects the NO_COLOR env var)
+    #[arg(long, global = true)]
     pub no_color: bool,
 
     /// Use ASCII-only symbols
@@ -397,9 +397,10 @@ fn run(cli: Cli, ui_opts: &UiOptions) -> anyhow::Result<()> {
 }
 
 fn supports_color() -> bool {
-    use is_terminal::IsTerminal;
+    use std::io::IsTerminal;
 
-    if std::env::var("NO_COLOR").is_ok() {
+    // Per the NO_COLOR spec, any non-empty value disables color.
+    if std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty()) {
         return false;
     }
 

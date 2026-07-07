@@ -5,7 +5,7 @@ use crate::worktree::list_worktrees;
 use anyhow::{bail, Result};
 use console::Term;
 use dialoguer::FuzzySelect;
-use is_terminal::IsTerminal;
+use std::io::IsTerminal;
 
 pub fn execute(repo: &GitRepo, _opts: &UiOptions) -> Result<()> {
     if !std::io::stdin().is_terminal() {
