@@ -6,13 +6,21 @@ use crate::worktree::{list_worktrees, slug_from_branch};
 use anyhow::{bail, Context, Result};
 use std::process::Command;
 
-pub struct PrOptions {
+#[derive(Debug, clap::Args)]
+pub struct PrArgs {
+    /// PR number
     pub number: u32,
+
+    /// Print only the created path to stdout
+    #[arg(long)]
     pub print_path: bool,
+
+    /// Open the worktree in configured editor
+    #[arg(long, short = 'o')]
     pub open: bool,
 }
 
-pub fn execute(repo: &GitRepo, opts: PrOptions) -> Result<()> {
+pub fn execute(repo: &GitRepo, opts: PrArgs) -> Result<()> {
     if !is_gh_installed() {
         bail!("GitHub CLI (gh) is not installed. Install it from https://cli.github.com/");
     }

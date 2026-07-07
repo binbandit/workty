@@ -3,6 +3,13 @@ use crate::ui;
 use anyhow::{Context, Result};
 use std::process::Command;
 
+#[derive(Debug, clap::Args)]
+pub struct FetchArgs {
+    /// Fetch from all remotes, not just origin
+    #[arg(long, short = 'a')]
+    pub all: bool,
+}
+
 pub fn execute(repo: &GitRepo, all: bool) -> Result<()> {
     ui::print_info("Fetching from remotes...");
 

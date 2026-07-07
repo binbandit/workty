@@ -5,12 +5,18 @@ use crate::worktree::list_worktrees;
 use anyhow::{Context, Result};
 use std::process::Command;
 
-pub struct SyncOptions {
+#[derive(Debug, clap::Args)]
+pub struct SyncArgs {
+    /// Show what would be done without doing it
+    #[arg(long, short = 'n')]
     pub dry_run: bool,
+
+    /// Fetch from origin before syncing
+    #[arg(long, short = 'f')]
     pub fetch: bool,
 }
 
-pub fn execute(repo: &GitRepo, opts: SyncOptions) -> Result<()> {
+pub fn execute(repo: &GitRepo, opts: SyncArgs) -> Result<()> {
     // Optionally fetch first
     if opts.fetch {
         ui::print_info("Fetching from origin...");

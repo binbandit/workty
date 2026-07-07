@@ -7,14 +7,21 @@ use dialoguer::Confirm;
 use std::io::IsTerminal;
 use std::process::Command;
 
-pub struct RmOptions {
+#[derive(Debug, clap::Args)]
+pub struct RmArgs {
+    /// Worktree name to remove
     pub name: String,
+
+    /// Remove even if worktree has uncommitted changes
+    #[arg(long, short = 'f')]
     pub force: bool,
+
+    /// Also delete the branch after removing worktree
+    #[arg(long, short = 'd')]
     pub delete_branch: bool,
-    pub yes: bool,
 }
 
-pub fn execute(repo: &GitRepo, opts: RmOptions) -> Result<()> {
+pub fn execute(repo: &GitRepo, opts: RmArgs, yes: bool) -> Result<()> {
     let worktrees = list_worktrees(repo)?;
 
     let wt = find_worktree(&worktrees, &opts.name).ok_or_else(|| {
@@ -48,7 +55,7 @@ pub fn execute(repo: &GitRepo, opts: RmOptions) -> Result<()> {
         ));
     }
 
-    if !opts.yes && std::io::stdin().is_terminal() {
+    if !yes && std::io::stdin().is_terminal() {
         let confirm = Confirm::new()
             .with_prompt(format!(
                 "Remove worktree '{}'{}?",

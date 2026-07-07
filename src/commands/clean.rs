@@ -8,15 +8,26 @@ use dialoguer::Confirm;
 use std::io::IsTerminal;
 use std::process::Command;
 
-pub struct CleanOptions {
+#[derive(Debug, clap::Args)]
+pub struct CleanArgs {
+    /// Remove worktrees whose branch is merged into base
+    #[arg(long)]
     pub merged: bool,
+
+    /// Remove worktrees whose upstream branch was deleted
+    #[arg(long)]
     pub gone: bool,
+
+    /// Remove worktrees not touched in N days
+    #[arg(long = "stale", value_name = "DAYS")]
     pub stale_days: Option<u32>,
+
+    /// Show what would be removed without removing
+    #[arg(long, short = 'n')]
     pub dry_run: bool,
-    pub yes: bool,
 }
 
-pub fn execute(repo: &GitRepo, opts: CleanOptions) -> Result<()> {
+pub fn execute(repo: &GitRepo, opts: CleanArgs, yes: bool) -> Result<()> {
     let config = Config::load(repo)?;
     let worktrees = list_worktrees(repo)?;
     let current_path = std::env::current_dir().unwrap_or_default();
@@ -149,7 +160,7 @@ pub fn execute(repo: &GitRepo, opts: CleanOptions) -> Result<()> {
         return Ok(());
     }
 
-    if !opts.yes && std::io::stdin().is_terminal() {
+    if !yes && std::io::stdin().is_terminal() {
         let confirm = Confirm::new()
             .with_prompt(format!("Remove {} worktree(s)?", clean_candidates.len()))
             .default(false)
@@ -159,7 +170,7 @@ pub fn execute(repo: &GitRepo, opts: CleanOptions) -> Result<()> {
             eprintln!("Aborted.");
             return Ok(());
         }
-    } else if !opts.yes {
+    } else if !yes {
         bail!("Non-interactive mode requires --yes flag for destructive operations");
     }
 

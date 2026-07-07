@@ -6,17 +6,37 @@ use anyhow::{bail, Context, Result};
 use std::path::PathBuf;
 use std::process::Command;
 
-pub struct NewOptions {
+#[derive(Debug, clap::Args)]
+pub struct NewArgs {
+    /// Branch name for the new workspace
     pub name: String,
+
+    /// Base branch or commit to create from
+    #[arg(long, short = 'f')]
     pub from: Option<String>,
+
+    /// Custom path for the worktree
+    #[arg(long, short = 'p')]
     pub path: Option<PathBuf>,
+
+    /// Print only the created path to stdout
+    #[arg(long)]
     pub print_path: bool,
+
+    /// Open the worktree in configured editor
+    #[arg(long, short = 'o')]
     pub open: bool,
+
+    /// Skip fetching from remote before creating
+    #[arg(long)]
     pub no_fetch: bool,
+
+    /// Skip pushing to set upstream after creating
+    #[arg(long)]
     pub no_push: bool,
 }
 
-pub fn execute(repo: &GitRepo, opts: NewOptions) -> Result<()> {
+pub fn execute(repo: &GitRepo, opts: NewArgs) -> Result<()> {
     let config = Config::load(repo)?;
 
     let branch_name = &opts.name;

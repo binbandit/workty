@@ -1,10 +1,18 @@
-pub fn generate_init(shell: &str, wrap_git: bool, no_cd: bool) -> String {
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum ShellKind {
+    Bash,
+    Zsh,
+    Fish,
+    #[value(alias = "pwsh")]
+    Powershell,
+}
+
+pub fn generate_init(shell: ShellKind, wrap_git: bool, no_cd: bool) -> String {
     match shell {
-        "bash" => generate_bash(wrap_git, no_cd),
-        "zsh" => generate_zsh(wrap_git, no_cd),
-        "fish" => generate_fish(wrap_git, no_cd),
-        "powershell" | "pwsh" => generate_powershell(wrap_git, no_cd),
-        _ => format!("# Unsupported shell: {}\n", shell),
+        ShellKind::Bash => generate_bash(wrap_git, no_cd),
+        ShellKind::Zsh => generate_zsh(wrap_git, no_cd),
+        ShellKind::Fish => generate_fish(wrap_git, no_cd),
+        ShellKind::Powershell => generate_powershell(wrap_git, no_cd),
     }
 }
 

@@ -6,9 +6,16 @@ use crate::worktree::{list_worktrees, Worktree};
 use anyhow::Result;
 use std::path::PathBuf;
 
-pub fn execute(repo: &GitRepo, opts: &UiOptions, fast: bool) -> Result<()> {
+#[derive(Debug, Default, clap::Args)]
+pub struct ListArgs {
+    /// Skip dirty file check for faster output
+    #[arg(long)]
+    pub fast: bool,
+}
+
+pub fn execute(repo: &GitRepo, opts: &UiOptions, args: ListArgs) -> Result<()> {
     let worktrees = list_worktrees(repo)?;
-    let statuses = if fast {
+    let statuses = if args.fast {
         get_all_statuses_fast(repo, &worktrees)
     } else {
         get_all_statuses(repo, &worktrees)

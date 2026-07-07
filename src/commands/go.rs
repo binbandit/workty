@@ -2,6 +2,12 @@ use crate::git::GitRepo;
 use crate::worktree::{find_worktree, list_worktrees};
 use anyhow::{bail, Result};
 
+#[derive(Debug, clap::Args)]
+pub struct GoArgs {
+    /// Worktree name (branch name or directory name)
+    pub name: String,
+}
+
 pub fn execute(repo: &GitRepo, name: &str) -> Result<()> {
     let worktrees = list_worktrees(repo)?;
 

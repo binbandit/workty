@@ -1,12 +1,20 @@
-use crate::shell::generate_init;
+use crate::shell::{generate_init, ShellKind};
 
-pub struct InitOptions {
-    pub shell: String,
+#[derive(Debug, clap::Args)]
+pub struct InitArgs {
+    /// Shell to generate script for
+    #[arg(value_enum)]
+    pub shell: ShellKind,
+
+    /// Generate git wrapper that auto-cds
+    #[arg(long)]
     pub wrap_git: bool,
+
+    /// Disable cd helpers (completions only)
+    #[arg(long)]
     pub no_cd: bool,
 }
 
-pub fn execute(opts: InitOptions) {
-    let output = generate_init(&opts.shell, opts.wrap_git, opts.no_cd);
-    print!("{}", output);
+pub fn execute(args: InitArgs) {
+    print!("{}", generate_init(args.shell, args.wrap_git, args.no_cd));
 }

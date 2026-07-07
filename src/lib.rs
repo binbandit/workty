@@ -73,54 +73,20 @@ pub struct Cli {
 pub enum Commands {
     /// Show dashboard of all worktrees (default)
     #[command(visible_alias = "ls")]
-    List {
-        /// Skip dirty file check for faster output
-        #[arg(long)]
-        fast: bool,
-    },
+    List(list::ListArgs),
 
     /// Create a new workspace
     #[command(after_help = "EXAMPLES:
     git workty new feat/login
     git workty new hotfix --from main
     git workty new feature --no-fetch --no-push")]
-    New {
-        /// Branch name for the new workspace
-        name: String,
-
-        /// Base branch or commit to create from
-        #[arg(long, short = 'f')]
-        from: Option<String>,
-
-        /// Custom path for the worktree
-        #[arg(long, short = 'p')]
-        path: Option<PathBuf>,
-
-        /// Print only the created path to stdout
-        #[arg(long)]
-        print_path: bool,
-
-        /// Open the worktree in configured editor
-        #[arg(long, short = 'o')]
-        open: bool,
-
-        /// Skip fetching from remote before creating
-        #[arg(long)]
-        no_fetch: bool,
-
-        /// Skip pushing to set upstream after creating
-        #[arg(long)]
-        no_push: bool,
-    },
+    New(new::NewArgs),
 
     /// Print path to a worktree by name
     #[command(after_help = "EXAMPLES:
     cd \"$(git workty go feat/login)\"
     git workty go main")]
-    Go {
-        /// Worktree name (branch name or directory name)
-        name: String,
-    },
+    Go(go::GoArgs),
 
     /// Interactively select a worktree (fuzzy finder)
     #[command(after_help = "EXAMPLES:
@@ -132,58 +98,20 @@ pub enum Commands {
     git workty rm feat/login
     git workty rm feat/login --delete-branch
     git workty rm feat/login --force")]
-    Rm {
-        /// Worktree name to remove
-        name: String,
-
-        /// Remove even if worktree has uncommitted changes
-        #[arg(long, short = 'f')]
-        force: bool,
-
-        /// Also delete the branch after removing worktree
-        #[arg(long, short = 'd')]
-        delete_branch: bool,
-    },
+    Rm(rm::RmArgs),
 
     /// Remove merged or stale worktrees
     #[command(after_help = "EXAMPLES:
     git workty clean --merged --dry-run
     git workty clean --gone --yes
     git workty clean --stale 30")]
-    Clean {
-        /// Remove worktrees whose branch is merged into base
-        #[arg(long)]
-        merged: bool,
-
-        /// Remove worktrees whose upstream branch was deleted
-        #[arg(long)]
-        gone: bool,
-
-        /// Remove worktrees not touched in N days
-        #[arg(long, value_name = "DAYS")]
-        stale: Option<u32>,
-
-        /// Show what would be removed without removing
-        #[arg(long, short = 'n')]
-        dry_run: bool,
-    },
+    Clean(clean::CleanArgs),
 
     /// Print shell integration script
     #[command(after_help = "EXAMPLES:
     eval \"$(git workty init zsh)\"
     git workty init bash >> ~/.bashrc")]
-    Init {
-        /// Shell to generate script for (bash, zsh, fish, powershell)
-        shell: String,
-
-        /// Generate git wrapper that auto-cds
-        #[arg(long)]
-        wrap_git: bool,
-
-        /// Disable cd helpers (completions only)
-        #[arg(long)]
-        no_cd: bool,
-    },
+    Init(init::InitArgs),
 
     /// Diagnose common issues
     Doctor,
@@ -201,42 +129,19 @@ pub enum Commands {
     #[command(after_help = "EXAMPLES:
     git workty pr 123
     cd \"$(git workty pr 123 --print-path)\"")]
-    Pr {
-        /// PR number
-        number: u32,
-
-        /// Print only the created path to stdout
-        #[arg(long)]
-        print_path: bool,
-
-        /// Open the worktree in configured editor
-        #[arg(long, short = 'o')]
-        open: bool,
-    },
+    Pr(pr::PrArgs),
 
     /// Fetch from remotes (updates tracking info for all worktrees)
     #[command(after_help = "EXAMPLES:
     git workty fetch
     git workty fetch --all")]
-    Fetch {
-        /// Fetch from all remotes, not just origin
-        #[arg(long, short = 'a')]
-        all: bool,
-    },
+    Fetch(fetch::FetchArgs),
 
     /// Rebase all clean worktrees onto their upstream
     #[command(after_help = "EXAMPLES:
     git workty sync --dry-run
     git workty sync --fetch")]
-    Sync {
-        /// Show what would be done without doing it
-        #[arg(long, short = 'n')]
-        dry_run: bool,
-
-        /// Fetch from origin before syncing
-        #[arg(long, short = 'f')]
-        fetch: bool,
-    },
+    Sync(sync::SyncArgs),
 
     /// Install manpage to ~/.local/share/man/man1
     InstallMan,
@@ -260,138 +165,31 @@ pub fn run_cli() {
 }
 
 fn run(cli: Cli, ui_opts: &UiOptions) -> anyhow::Result<()> {
-    let start_path = cli.directory.as_deref();
+    let repo = || GitRepo::discover(cli.directory.as_deref());
 
     match cli.command {
-        None => {
-            let repo = GitRepo::discover(start_path)?;
-            list::execute(&repo, ui_opts, false)
-        }
-
-        Some(Commands::List { fast }) => {
-            let repo = GitRepo::discover(start_path)?;
-            list::execute(&repo, ui_opts, fast)
-        }
-
-        Some(Commands::New {
-            name,
-            from,
-            path,
-            print_path,
-            open,
-            no_fetch,
-            no_push,
-        }) => {
-            let repo = GitRepo::discover(start_path)?;
-            new::execute(
-                &repo,
-                new::NewOptions {
-                    name,
-                    from,
-                    path,
-                    print_path,
-                    open,
-                    no_fetch,
-                    no_push,
-                },
-            )
-        }
-
-        Some(Commands::Go { name }) => {
-            let repo = GitRepo::discover(start_path)?;
-            go::execute(&repo, &name)
-        }
-
-        Some(Commands::Pick) => {
-            let repo = GitRepo::discover(start_path)?;
-            pick::execute(&repo, ui_opts)
-        }
-
-        Some(Commands::Rm {
-            name,
-            force,
-            delete_branch,
-        }) => {
-            let repo = GitRepo::discover(start_path)?;
-            rm::execute(
-                &repo,
-                rm::RmOptions {
-                    name,
-                    force,
-                    delete_branch,
-                    yes: cli.yes,
-                },
-            )
-        }
-
-        Some(Commands::Clean {
-            merged,
-            gone,
-            stale,
-            dry_run,
-        }) => {
-            let repo = GitRepo::discover(start_path)?;
-            clean::execute(
-                &repo,
-                clean::CleanOptions {
-                    merged,
-                    gone,
-                    stale_days: stale,
-                    dry_run,
-                    yes: cli.yes,
-                },
-            )
-        }
-
-        Some(Commands::Init {
-            shell,
-            wrap_git,
-            no_cd,
-        }) => {
-            init::execute(init::InitOptions {
-                shell,
-                wrap_git,
-                no_cd,
-            });
+        None => list::execute(&repo()?, ui_opts, list::ListArgs::default()),
+        Some(Commands::List(args)) => list::execute(&repo()?, ui_opts, args),
+        Some(Commands::New(args)) => new::execute(&repo()?, args),
+        Some(Commands::Go(args)) => go::execute(&repo()?, &args.name),
+        Some(Commands::Pick) => pick::execute(&repo()?, ui_opts),
+        Some(Commands::Rm(args)) => rm::execute(&repo()?, args, cli.yes),
+        Some(Commands::Clean(args)) => clean::execute(&repo()?, args, cli.yes),
+        Some(Commands::Init(args)) => {
+            init::execute(args);
             Ok(())
         }
-
         Some(Commands::Doctor) => {
-            doctor::execute(start_path);
+            doctor::execute(cli.directory.as_deref());
             Ok(())
         }
-
         Some(Commands::Completions { shell }) => {
             completions::execute::<Cli>(shell);
             Ok(())
         }
-
-        Some(Commands::Pr {
-            number,
-            print_path,
-            open,
-        }) => {
-            let repo = GitRepo::discover(start_path)?;
-            pr::execute(
-                &repo,
-                pr::PrOptions {
-                    number,
-                    print_path,
-                    open,
-                },
-            )
-        }
-
-        Some(Commands::Fetch { all }) => {
-            let repo = GitRepo::discover(start_path)?;
-            fetch::execute(&repo, all)
-        }
-
-        Some(Commands::Sync { dry_run, fetch }) => {
-            let repo = GitRepo::discover(start_path)?;
-            sync::execute(&repo, sync::SyncOptions { dry_run, fetch })
-        }
-
+        Some(Commands::Pr(args)) => pr::execute(&repo()?, args),
+        Some(Commands::Fetch(args)) => fetch::execute(&repo()?, args.all),
+        Some(Commands::Sync(args)) => sync::execute(&repo()?, args),
         Some(Commands::InstallMan) => install_man::execute(cli.yes),
     }
 }
